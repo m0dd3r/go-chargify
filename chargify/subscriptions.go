@@ -52,6 +52,9 @@ type Subscription struct {
 
 type SubscriptionsService service
 
+// Create creates a new subscription.
+//
+// Chargify API docs: https://reference.chargify.com/v1/subscriptions/create-subscription
 func (svc *SubscriptionsService) Create(ctx context.Context, sub *Subscription) (*Subscription, *Response, error) {
 	u := "/subscriptions"
 
@@ -87,4 +90,23 @@ func (s *SubscriptionsService) Get(ctx context.Context, id int) (*Subscription, 
 	}
 
 	return sw.Subscription, resp, nil
+}
+
+// Destroy cancels a subscription.
+//
+// Chargify API docs: https://reference.chargify.com/v1/subscriptions/cancel-subscription
+func (svc *SubscriptionsService) Destroy(ctx context.Context, id int) (*Subscription, *Response, error) {
+	u := fmt.Sprintf("subscriptions/%d", id)
+	req, err := svc.client.NewRequest("DELETE", u, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	swr := new(SubscriptionWrapper)
+	resp, err := svc.client.Do(ctx, req, swr)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return swr.Subscription, resp, nil
 }

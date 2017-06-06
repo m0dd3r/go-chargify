@@ -1,8 +1,10 @@
 package chargify
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"html/template"
 	"net/http"
 	"testing"
 
@@ -13,7 +15,7 @@ const (
 	subscriptionJSON = `{
 		"subscription": {
 			"id": 14900541,
-			"state": "active",
+			"state": "{{.State}}",
 			"trial_started_at": "2016-10-24T16:20:12-04:00",
 			"trial_ended_at": "2016-10-24T16:20:43-04:00",
 			"activated_at": "2016-10-24T16:20:43-04:00",
@@ -144,10 +146,28 @@ const (
 	}`
 )
 
-func testSub() *Subscription {
+func testSubJSON(state string) string {
+	t, err := template.New("subscriptionJSON").Parse(subscriptionJSON)
+	if err != nil {
+		panic(err)
+	}
+
+	var buf bytes.Buffer
+	err = t.Execute(&buf, struct{ State string }{state})
+	if err != nil {
+		panic(err)
+	}
+	return buf.String()
+
+}
+
+func testSub(state string) *Subscription {
+	if state == "" {
+		state = "active"
+	}
 	return &Subscription{
 		Id:                          14900541,
-		State:                       "active",
+		State:                       state,
 		TrialStartedAt:              NewFormattedTime(`"2016-10-24T16:20:12-04:00"`),
 		TrialEndedAt:                NewFormattedTime(`"2016-10-24T16:20:43-04:00"`),
 		ActivatedAt:                 NewFormattedTime(`"2016-10-24T16:20:43-04:00"`),
@@ -283,7 +303,7 @@ func TestSubscriptionsService_Get(t *testing.T) {
 
 	mux.HandleFunc("/subscriptions/14900541", func(w http.ResponseWriter, r *http.Request) {
 		testMethod(t, r, "GET")
-		fmt.Fprint(w, subscriptionJSON)
+		fmt.Fprint(w, testSubJSON("active"))
 	})
 
 	sub, _, err := client.Subscriptions.Get(context.Background(), 14900541)
@@ -291,7 +311,7 @@ func TestSubscriptionsService_Get(t *testing.T) {
 		t.Errorf("Subscription.Get returned error: %v", err)
 	}
 
-	want := testSub()
+	want := testSub("active")
 	if diff := pretty.Compare(sub, want); diff != "" {
 		t.Errorf("Products.List diff: (-got +want)\n%s\n", diff)
 	}
@@ -303,17 +323,37 @@ func TestSubscriptionsService_Create(t *testing.T) {
 
 	mux.HandleFunc("/subscriptions", func(w http.ResponseWriter, r *http.Request) {
 		testMethod(t, r, "POST")
-		fmt.Fprint(w, subscriptionJSON)
+		fmt.Fprint(w, testSubJSON("active"))
 	})
 
-	input := testSub()
+	input := testSub("active")
 	input.Id = 0
 	sub, _, err := client.Subscriptions.Create(context.Background(), input)
 	if err != nil {
 		t.Errorf("Subscription.Get returned error: %v", err)
 	}
 
-	want := testSub()
+	want := testSub("active")
+	if diff := pretty.Compare(sub, want); diff != "" {
+		t.Errorf("Products.List diff: (-got +want)\n%s\n", diff)
+	}
+}
+
+func TestSubscriptionsService_Destroy(t *testing.T) {
+	setup()
+	defer teardown()
+
+	mux.HandleFunc("/subscriptions/14900541", func(w http.ResponseWriter, r *http.Request) {
+		testMethod(t, r, "DELETE")
+		fmt.Fprint(w, testSubJSON("canceled"))
+	})
+
+	sub, _, err := client.Subscriptions.Destroy(context.Background(), 14900541)
+	if err != nil {
+		t.Errorf("Subscription.Destroy returned error: %v", err)
+	}
+
+	want := testSub("canceled")
 	if diff := pretty.Compare(sub, want); diff != "" {
 		t.Errorf("Products.List diff: (-got +want)\n%s\n", diff)
 	}
